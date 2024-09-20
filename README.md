@@ -1,2 +1,2 @@
-# vmt-hooking
- Example of VMT hooking to display a simple GUI from ImGui on a minimal DX9 application using Microsoft's Detour library.
+# VMT Hooking: a minimal example
+Simple example of VMT hooking to display a simple ImGui render on a minimal DX9 application using Microsoft's Detour library.
