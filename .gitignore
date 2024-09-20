@@ -1,0 +1,17 @@
+
+*.pdb
+*.exe
+*.tlog
+*.obj
+*.log
+*.recipe
+*.txt
+*.ipch
+*.json
+*.db-shm
+*.db-wal
+*.opendb
+*.vsidx
+*.db
+.vs/vmt-hooking/v17/.suo
+Project1/Project1.vcxproj.user
