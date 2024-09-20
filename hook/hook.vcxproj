@@ -104,11 +104,12 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(DXSDK_DIR)Include;$(DXSDK_DIR)Lib\x86;$(SolutionDir)external\detours\src;$(SolutionDir)external\detours;$(DXSDK_DIR)Lib\x64;$(SolutionDir)external\imgui;C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)external\detours\src;$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -119,17 +120,21 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(DXSDK_DIR)Include;$(DXSDK_DIR)Lib\x86;$(SolutionDir)external\detours\src;$(SolutionDir)external\detours;$(DXSDK_DIR)Lib\x64;$(SolutionDir)external\imgui;C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)external\detours\src;$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Project1\hook_dll.cpp" />
+    <ClCompile Include="..\Project1\hook_dll.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(DXSDK_DIR)Include;$(SolutionDir)external\detours\src;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\imgui;$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(DXSDK_DIR)Include;$(SolutionDir)external\detours\src;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\imgui;$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

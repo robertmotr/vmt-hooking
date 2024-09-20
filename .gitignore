@@ -15,3 +15,5 @@
 *.db
 .vs/vmt-hooking/v17/.suo
 Project1/Project1.vcxproj.user
+hook/x64/Debug/vc143.idb
+*.idb

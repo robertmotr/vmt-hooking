@@ -9,14 +9,23 @@
 // link required DX9 library (todo: find out exactly why? i hate development on windows)
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
+#pragma comment(lib, "detours.lib")
 
-// function pointer for original EndScene function
-typedef HRESULT(__stdcall* EndScene_t)(IDirect3DDevice9*);
-// original EndScene function
+// typedefs for d3d fns	
+typedef IDirect3D9* (WINAPI* Direct3DCreate9_t)(UINT);
+typedef HRESULT(WINAPI* EndScene_t)(IDirect3DDevice9*);
+
+// original fn ptrs
 EndScene_t oEndScene = nullptr;
+Direct3DCreate9_t oD3DCreate9 = Direct3DCreate9;
 
+// hook function for Direct3DCreate9
+IDirect3D9* WINAPI hkD3DCreate9(UINT SDKVersion) {
+	IDirect3D9* pD3D = oD3DCreate9(SDKVersion);
+	return pD3D;
+}
 // hook function for EndScene
-HRESULT __stdcall hkEndScene(IDirect3DDevice9* device) {
+HRESULT WINAPI hkEndScene(IDirect3DDevice9* device) {
 
 	// start new frame 
 	ImGui_ImplDX9_NewFrame();
@@ -24,8 +33,8 @@ HRESULT __stdcall hkEndScene(IDirect3DDevice9* device) {
 	ImGui::NewFrame();
 
 	// render 
-	ImGui::Begin("Hello, world!");
-	ImGui::Text("This is some useful text.");
+	ImGui::Begin("hook");
+	ImGui::Text("Now hooked using imgui.");
 	ImGui::End();
 	ImGui::Render();
 	ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
@@ -45,4 +54,32 @@ void hkInstall(IDirect3DDevice9* device) {
 	DetourUpdateThread(GetCurrentThread());
 	DetourAttach(&(PVOID&)pVMT[42], hkEndScene);
 	DetourTransactionCommit();
+}
+
+void setupImGui(IDirect3DDevice9* pDevice) {
+	ImGui::CreateContext();
+	ImGui_ImplWin32_Init(GetForegroundWindow());
+	ImGui_ImplDX9_Init(pDevice);
+}
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+	switch (fdwReason) {
+	case DLL_PROCESS_ATTACH:
+		DetourTransactionBegin();
+		DetourUpdateThread(GetCurrentThread());
+		DetourAttach(&(PVOID&)oD3DCreate9, hkD3DCreate9);
+		DetourTransactionCommit();
+	case DLL_THREAD_ATTACH:
+		DetourTransactionBegin();
+		DetourUpdateThread(GetCurrentThread());
+		DetourAttach(&(PVOID&)oD3DCreate9, hkD3DCreate9);
+		DetourTransactionCommit();
+	case DLL_THREAD_DETACH:
+		// Cleanup code here
+		break;
+	case DLL_PROCESS_DETACH:
+		// Cleanup code here
+		break;
+	}
+	return TRUE; 
 }
