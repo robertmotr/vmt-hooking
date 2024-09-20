@@ -9,6 +9,7 @@ on:
 env:
   SOLUTION_FILE_PATH: .
   BUILD_CONFIGURATION: Release
+  ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 permissions:
   contents: read
 jobs:
