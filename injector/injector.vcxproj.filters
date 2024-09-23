@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Project1\injector.cpp">
+    <ClCompile Include="..\injector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

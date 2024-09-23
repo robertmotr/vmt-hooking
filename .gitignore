@@ -17,3 +17,10 @@
 Project1/Project1.vcxproj.user
 hook/x64/Debug/vc143.idb
 *.idb
+.vs/vmt-hooking/v17/.wsuo
+.vs/slnx.sqlite
+dx9_app/dx9_app/x64/Debug/dx9_app.ilk
+hook/x64/Debug/hook.ilk
+hook/x64/Debug/vc143.idb
+*.ilk
+*.idb

@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Project1\hook_dll.cpp">
+    <ClCompile Include="..\dx9_app.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

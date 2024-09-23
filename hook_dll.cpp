@@ -6,7 +6,6 @@
 #include <imgui_impl_dx9.h>
 #include <imgui_impl_win32.h>
 
-// link required DX9 library (todo: find out exactly why? i hate development on windows)
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
 #pragma comment(lib, "detours.lib")
@@ -65,6 +64,7 @@ void setupImGui(IDirect3DDevice9* pDevice) {
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
 	switch (fdwReason) {
 	case DLL_PROCESS_ATTACH:
+		MessageBox(NULL, "injection successful", "test", MB_OK);
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
 		DetourAttach(&(PVOID&)oD3DCreate9, hkD3DCreate9);
@@ -81,5 +81,5 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
 		// Cleanup code here
 		break;
 	}
-	return TRUE; 
+	return TRUE;
 }

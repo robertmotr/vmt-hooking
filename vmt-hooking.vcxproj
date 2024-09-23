@@ -20,39 +20,31 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{44811229-F400-4590-8F43-A0E528736CCA}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{4baad729-6702-4b1d-865e-516ceeb09fb7}</ProjectGuid>
-    <RootNamespace>Project1</RootNamespace>
+    <ProjectName>hook</ProjectName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>dx9_app</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>true</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -72,86 +64,105 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)LIB\x86</IncludePath>
-    <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)LIB\x86</ExternalIncludePath>
-    <LibraryWPath>$(WindowsSDK_MetadataPath);$(DXSDK_DIR)LIB\x86</LibraryWPath>
-    <SourcePath>$(VC_SourcePath);$(DXSDK_DIR)LIB\x86</SourcePath>
-    <LibraryPath>$(DXSDK_DIR)Lib\x86;$(LibraryPath);(DXSDK_DIR)Lib\x64</LibraryPath>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)LIB\x86</IncludePath>
-    <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)LIB\x86</ExternalIncludePath>
-    <LibraryWPath>$(WindowsSDK_MetadataPath);$(DXSDK_DIR)LIB\x86</LibraryWPath>
-    <SourcePath>$(VC_SourcePath);$(DXSDK_DIR)LIB\x86</SourcePath>
-    <LibraryPath>$(DXSDK_DIR)Lib\x86;$(LibraryPath);(DXSDK_DIR)Lib\x64</LibraryPath>
+    <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(DXSDK_DIR)Include;$(DXSDK_DIR)Lib;$(DXSDK_DIR);C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends;C:\Users\T9812626\Desktop\vmt-hooking\external\detours\src;C:\Users\T9812626\Desktop\vmt-hooking\external\detours;C:\Users\T9812626\Desktop\vmt-hooking\external\imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)external\detours\include;$(SolutionDir)external\detours;$(DXSDK_DIR)Include;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);d3d9.lib;d3dx9.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>$(SolutionDir)external\detours\lib.X86;$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(DXSDK_DIR)Include;$(DXSDK_DIR)Lib;$(DXSDK_DIR);C:\Users\T9812626\Desktop\vmt-hooking\external\imgui\backends;C:\Users\T9812626\Desktop\vmt-hooking\external\detours\src;C:\Users\T9812626\Desktop\vmt-hooking\external\detours;C:\Users\T9812626\Desktop\vmt-hooking\external\imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);d3d9.lib;d3dx9.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x64;$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="dx9_app.cpp" />
+    <ClInclude Include="external\detours\include\detver.h" />
+    <ClInclude Include="external\detours\include\syelog.h" />
+    <ClInclude Include="external\detours\src\detours.h" />
+    <ClInclude Include="external\imgui\backends\imgui_impl_dx9.h" />
+    <ClInclude Include="external\imgui\backends\imgui_impl_win32.h" />
+    <ClInclude Include="external\imgui\imconfig.h" />
+    <ClInclude Include="external\imgui\imgui.h" />
+    <ClInclude Include="external\imgui\imgui_internal.h" />
+    <ClInclude Include="external\imgui\imstb_rectpack.h" />
+    <ClInclude Include="external\imgui\imstb_textedit.h" />
+    <ClInclude Include="external\imgui\imstb_truetype.h" />
+    <ClInclude Include="external\imgui\misc\cpp\imgui_stdlib.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="external\detours\src\creatwth.cpp" />
+    <ClCompile Include="external\detours\src\detours.cpp" />
+    <ClCompile Include="external\detours\src\disasm.cpp" />
+    <ClCompile Include="external\detours\src\disolarm.cpp" />
+    <ClCompile Include="external\detours\src\disolarm64.cpp" />
+    <ClCompile Include="external\detours\src\disolia64.cpp" />
+    <ClCompile Include="external\detours\src\disolx64.cpp" />
+    <ClCompile Include="external\detours\src\disolx86.cpp" />
+    <ClCompile Include="external\detours\src\image.cpp" />
+    <ClCompile Include="external\detours\src\modules.cpp" />
+    <ClCompile Include="external\imgui\backends\imgui_impl_dx9.cpp" />
+    <ClCompile Include="external\imgui\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="external\imgui\imgui.cpp" />
+    <ClCompile Include="external\imgui\imgui_demo.cpp" />
+    <ClCompile Include="external\imgui\imgui_draw.cpp" />
+    <ClCompile Include="external\imgui\imgui_tables.cpp" />
+    <ClCompile Include="external\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="hook_dll.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="external\detours\lib.X86\detours.lib" />
+    <Library Include="external\detours\lib.X86\syelog.lib" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="external\detours\lib.X86\detours.pdb" />
+    <None Include="external\detours\src\Makefile" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
