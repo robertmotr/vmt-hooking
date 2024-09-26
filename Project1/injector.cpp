@@ -4,10 +4,14 @@
 #include <string>
 #include <iomanip>
 #include <commdlg.h>
+#include <vector>
+#include <tuple>
+#include <algorithm>
+
+using Process = std::tuple<std::string, DWORD>;
 
 // Error occured while (stuff here):\n GetLastError()
-void displayError(std::string typefailure)
-{
+void displayError(std::string typefailure) {
 	std::cout << "Error occurred while " + typefailure + ":\n" << GetLastError() << std::endl;
 	system("PAUSE");
 }
@@ -47,6 +51,8 @@ int main() {
 		}
 	};
 
+	std::vector<Process> process_list;
+
 	// enumerate over all processes, do this by getting tlh32 snapshot first
 	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	PROCESSENTRY32 pe32;
@@ -60,20 +66,33 @@ int main() {
 		exit(-1);
 	}
 	else {
-		std::cout << "Process name: " << std::setw(40) << pe32.szExeFile << std::setw(40) << "Process ID: " << std::setw(40) << pe32.th32ProcessID << std::endl;
+		process_list.emplace_back(std::string(pe32.szExeFile, pe32.szExeFile + wcslen(pe32.szExeFile)), pe32.th32ProcessID);
 	}
 
 	while (Process32Next(hSnap, &pe32)) {
-		std::cout << "Process name: " << std::setw(40) << pe32.szExeFile << std::setw(40) << "Process ID: " << std::setw(40) << pe32.th32ProcessID << std::endl;
+		process_list.emplace_back(std::string(pe32.szExeFile, pe32.szExeFile + wcslen(pe32.szExeFile)), pe32.th32ProcessID);
 	}
 	CloseHandle(hSnap);
+
+	// sort the process list by process name
+	std::sort(process_list.begin(), process_list.end(), [](const Process& a, const Process& b) {
+		return std::get<0>(a) < std::get<0>(b);
+	});
+
+	std::cout << "Processes running on the system:" << std::endl;
+	for (Process p : process_list) {
+		std::cout << "Process name: " << std::setw(40) << std::get<0>(p) << std::setw(40) << "Process ID: " << std::setw(40) << std::get<1>(p) << std::endl;
+	}
 
 	DWORD procId = 0;
 	std::cout << std::endl;
 	std::cout << "Enter a process ID from the list that you'd like to inject into." << std::endl;
 	std::cin >> procId;
 
-	HANDLE hTarget = OpenProcess(PROCESS_ALL_ACCESS, NULL, procId);
+	// before we had PROCESS_ALL_ACCESS but i feel like this may be less likely to flag AVs(?)
+	// besides ALL_ACCESS seems to be overkill anyways
+	HANDLE hTarget = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION |
+								 PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION, NULL, procId);
 
 	// check if handle is valid
 	if (hTarget) {

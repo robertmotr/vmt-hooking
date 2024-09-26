@@ -199,8 +199,6 @@ HRESULT WINAPI installHook() {
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
-	LONG beginStatus, updateStatus, attachStatus, commitStatus = 0;
-
 	// AllocConsole() and freopen() to redirect stdout to a console window for debugging
 	AllocConsole();
     freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);

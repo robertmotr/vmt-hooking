@@ -21,3 +21,5 @@ hook/x64/Debug/vc143.idb
 *.ilk
 *.idb
 *.idb
+*.ilk
+*.idb
