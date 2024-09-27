@@ -11,10 +11,12 @@ env:
   BUILD_CONFIGURATION: Release
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 permissions:
-  contents: read
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -22,42 +24,105 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Install Dependencies
+    - name: Install Dependencies (vcpkg + ImGui)
       run: |
         git clone https://github.com/microsoft/vcpkg.git
         cd vcpkg
         ./bootstrap-vcpkg.bat
+        ./vcpkg.exe integrate install
         ./vcpkg.exe install imgui[core,dx9-binding,win32-binding]:x64-windows
-    
-    - name:  Config
+        ./vcpkg.exe install directx:x64-windows
+        ./vcpkg.exe install d3d9:x64-windows
+        ./vcpkg.exe integrate project
+      shell: bash
+
+    - name: Setup Environment Variable for DirectX SDK
       run: echo ::set-env name=DXSDK_DIR::$HOME/cache/
       shell: bash
 
-    - name: Cache
-      id:   cache
+    - name: Cache DirectX SDK
+      id: cache
       uses: actions/cache@v1
       with:
-       path: ~/cache
-       key:  cache
+        path: ~/cache
+        key: cache
 
-    - name:  Cache create
-      if:    steps.cache.outputs.cache-hit != 'true'
-      run:   |
-             curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
-             7z x _DX2010_.exe DXSDK/Include -o_DX2010_
-             7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
-             mv _DX2010_/DXSDK $HOME/cache
-             rm -fR _DX*_ _DX*_.exe
+    - name: Cache DirectX SDK if missing
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
+        7z x _DX2010_.exe DXSDK/Include -o_DX2010_
+        7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
+        mv _DX2010_/DXSDK $HOME/cache
+        rm -fR _DX*_ _DX*_.exe
       shell: bash
 
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    - name: Build
+    - name: Build Hook (DLL)
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
+      run: |
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:TargetName=hook /p:OutputType=Library /t:Build injector.vcxproj
+        echo "Building hook.dll"
+
+    - name: Build Injector (EXE)
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:TargetName=injector /p:OutputType=Exe /t:Build injector.vcxproj
+        echo "Building injector.exe"
+
+    - name: Build DX9 App (EXE)
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:TargetName=dx9_app /p:OutputType=Exe /t:Build dx9_app.vcxproj
+        echo "Building dx9_app.exe"
 
     - name: Clean Up
       run: |
         Remove-Item -Recurse -Force vcpkg
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: build-artifacts
+        path: |
+          ${{env.GITHUB_WORKSPACE}}\path\to\injector.exe
+          ${{env.GITHUB_WORKSPACE}}\path\to\hook.dll
+          ${{env.GITHUB_WORKSPACE}}\path\to\dx9_app.exe
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v1.0.0
+        release_name: Release v1.0.0
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{env.GITHUB_WORKSPACE}}\path\to\injector.exe
+        asset_name: injector.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Assets for hook.dll
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{env.GITHUB_WORKSPACE}}\path\to\hook.dll
+        asset_name: hook.dll
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Assets for dx9_app.exe
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{env.GITHUB_WORKSPACE}}\path\to\dx9_app.exe
+        asset_name: dx9_app.exe
+        asset_content_type: application/octet-stream
