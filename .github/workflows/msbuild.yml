@@ -42,7 +42,7 @@ jobs:
 
     - name: Cache DirectX SDK
       id: cache
-      uses: actions/cache@v1
+      uses: actions/cache@v3
       with:
         path: ~/cache
         key: cache
@@ -84,7 +84,7 @@ jobs:
         Remove-Item -Recurse -Force vcpkg
 
     - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: build-artifacts
         path: |
@@ -103,7 +103,7 @@ jobs:
         draft: false
         prerelease: false
 
-    - name: Upload Release Assets
+    - name: Upload Release Assets for injector.exe
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
