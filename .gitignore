@@ -23,3 +23,10 @@ obj/
 *.opendb
 *.vsidx
 *.db
+*.ilk
+*.idb
+*.idb
+*.ilk
+*.idb
+*.filters
+*.lib

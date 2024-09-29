@@ -7,23 +7,25 @@
 #include <cstdio>
 #include <string>
 #include <iostream>
+#include <DxErr.h>
+#include <logger.h>
 
 // link dx9 libs and detours
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
+#pragma comment(lib, "logging.lib")
 
-// macro to print file and line number alongside cout
-#define LOG(x) std::cout << __FILE__ << ":" << __LINE__ << " " << x << "\n"
+#define ENDSCENE_INDEX 42
+#define VMT_SIZE 119
 
 // typedefs for DX9 stuff to clean things up
 // 2nd typedef is for the EndScene function so we can eventually use a PVOID given to us (need to cast it)
 typedef IDirect3DDevice9				DX9_DEVICE;
 typedef HRESULT							(WINAPI* EndScene)(DX9_DEVICE* ptrDevice);
 
-INT										endSceneIndex = 0;              // location of EndScene in vtable
 DX9_DEVICE*								device = nullptr;				// ptr to IDirect3DDevice9 
 void*									originalEndScene = nullptr;	    // fn ptr to original DX9::EndScene function
-void**									vtable = nullptr;               // ptr to IDirect3DDevice9 vtable
+void*									vtable[VMT_SIZE];  // ptr to IDirect3DDevice9 vtable
 
 /*
 short explanation because it was very difficult to find this info (chatgpt with some edits sprinkled in)
@@ -74,22 +76,14 @@ public:
 Two side notes:
 1. All objects of a given class that share the same virtual methods share the same VMT.
 2. Also, when each object is constructed, it holds a vptr that points to the vtable that is shared among all of its relatives.
+This vptr is usually the first member of the object's memory layout.
 
 VMT Hooking in practice:
 Find the vtable: Locate the vtable for the object, which is typically at the beginning of the object’s memory layout.
 Overwrite the method's function pointer: Replace the function pointer of the target method (e.g., EndScene in Direct3D) in the vtable with a pointer to your custom function (the hook).
 Intercept calls: When the method is called, your hook function is executed instead of the original method.
 Optionally, call the original method: Inside the hook, you can choose to call the original method by invoking the saved original function pointer.
-*/
 
-// self explanatory fn
-void setupImGui() {
-	ImGui::CreateContext();
-	ImGui_ImplWin32_Init(GetForegroundWindow());
-	ImGui_ImplDX9_Init(device);
-}
-
-/*
  * findVMT
  * --------------------
  * 1. Get the foreground window
@@ -99,9 +93,62 @@ void setupImGui() {
  *
  *  returns: S_OK/E_FAIL (HRESULT)
  */
+
+ /*
+  * hkEndScene (hooked version of EndScene)
+  * --------------------
+  * 1. Begin a new frame
+  * 2. Render ImGui
+  * 3. Return the original EndScene function
+  *  returns: S_OK/E_FAIL (HRESULT)
+ */
+HRESULT WINAPI hkEndScene(DX9_DEVICE* ptrDevice) {
+	LOG("Hooked EndScene called.");
+	static bool initialized = false;
+
+	if (!initialized) {
+		initialized = true;
+
+		ImGui::CreateContext();
+
+		// retrieve window handle from device
+		HRESULT hr;
+		D3DDEVICE_CREATION_PARAMETERS cparams;
+		hr = ptrDevice->GetCreationParameters(&cparams);
+		if (FAILED(hr)) {
+			LOG("Failed to get device creation parameters.");
+			LOG("Got: ", HResultToString(hr));
+			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
+		}
+		// init backend with correct window handle
+		if (!ImGui_ImplWin32_Init(cparams.hFocusWindow)) {
+			LOG("ImGui_ImplWin32_Init failed.");
+			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
+		}
+		if (!ImGui_ImplDX9_Init(ptrDevice)) {
+			LOG("ImGui_ImplDX9_Init failed.");
+			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
+		}
+	}
+
+	ImGui_ImplDX9_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	ImGui::Begin("hook");
+	ImGui::Text("Now hooked using ImGui.");
+	ImGui::End();
+
+	ImGui::EndFrame();
+	ImGui::Render();
+	ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+
+	// call original EndScene fn
+	return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
+}
+
 HRESULT WINAPI findVMT() {
-	// get hwnd first
-	HWND hwnd = GetForegroundWindow();
+	HWND hwnd = FindWindow(NULL, L"DirectX 9 Example");
 	if (!hwnd) {
 		LOG("Failed to get foreground window.");
 		return E_FAIL;
@@ -113,48 +160,57 @@ HRESULT WINAPI findVMT() {
 		return E_FAIL;
 	}
 
+	D3DDISPLAYMODE displayMode;
+	HRESULT result = pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &displayMode);
+	if (FAILED(result)) {
+		LOG("Failed to get adapter display mode. HRESULT: ", HResultToString(result));
+		pD3D->Release();
+		return E_FAIL;
+	}
+
 	D3DPRESENT_PARAMETERS d3dpp = {};
 	d3dpp.Windowed = TRUE;
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	d3dpp.hDeviceWindow = hwnd;
+	d3dpp.BackBufferFormat = displayMode.Format; 
+	d3dpp.BackBufferCount = 1;
+	d3dpp.BackBufferWidth = 0;
+	d3dpp.BackBufferHeight = 0;
+	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	d3dpp.MultiSampleType = D3DMULTISAMPLE_NONE;
+	d3dpp.MultiSampleQuality = 0;
 
-	// dummy Direct3D device
-	// recall that pD3D holds a vtable ptr to the same vtable as the real D3D obj we're interested in
-	pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device);
-	if (!device) {
-		LOG("Failed to create IDirect3DDevice9 object.");
+	result = pD3D->CheckDeviceType(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+		displayMode.Format, displayMode.Format, TRUE);
+	if (FAILED(result)) {
+		LOG("Failed to check device type in windowed mode. HRESULT: ", HResultToString(result));
+		pD3D->Release();
 		return E_FAIL;
 	}
 
-	LOG("Successfully created IDirect3DDevice9 object.");
+	result = pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
+		D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &device);
 
-	// each objects ptr to their shared vtable is located at the start of the memory layout of the object
-	vtable = reinterpret_cast<void**>(device);
+	if (FAILED(result)) {
+		LOG("Failed to create IDirect3DDevice9 object with hardware vertex processing. Trying software vertex processing. HRESULT: ", HResultToString(result));
+		result = pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
+			D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device);
+
+		if (FAILED(result)) {
+			LOG("Failed to create IDirect3DDevice9 object with software vertex processing. HRESULT: ", HResultToString(result));
+			pD3D->Release();
+			return E_FAIL;
+		}
+	}
+
+	LOG("Successfully created IDirect3DDevice9 object and found VMT.");
+
+	// obtain the vtable
+	memcpy(vtable, *(void***)device, sizeof(vtable));
+
+	pD3D->Release();
+	device->Release();
 	return S_OK;
-}
-
-/*
- * hkEndScene (hooked version of EndScene)
- * --------------------
- * 1. Begin a new frame
- * 2. Render ImGui
- * 3. Return the original EndScene function
- *  returns: S_OK/E_FAIL (HRESULT)
-*/
-HRESULT WINAPI hkEndScene(DX9_DEVICE* ptrDevice) {
-	ImGui_ImplDX9_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	ImGui::Begin("hook");
-	ImGui::Text("Now hooked using imgui.");
-	ImGui::End();
-	ImGui::Render();
-	ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-
-	// at this point in time, realize that calling ptrDevice->EndScene() will cause an infinite loop
-	// because we've replaced the original pointer with hkEndScene. so we need to call the original function
-	return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
 }
 
 /*
@@ -171,53 +227,39 @@ HRESULT WINAPI installHook() {
 		LOG("Getting module handle for d3d9.dll failed");
 	}
 
-	originalEndScene = reinterpret_cast<void*>(GetProcAddress(dx9Handle, "EndScene"));
+	originalEndScene = vtable[ENDSCENE_INDEX]; // 42 should be the index of EndScene in the vtable
 
-	// first let us find endScene (it should be 42 but we'll double check)
-	for (int i = 0; i < 128; i++) {
-		if (vtable[i] == originalEndScene) {
-			endSceneIndex = i;
-			LOG("Found EndScene at index: " << endSceneIndex);
-
-			// call virtualprotect to change read-only perms on vtable
-			DWORD oldProtect;
-			if (VirtualProtect(&vtable[i], sizeof(void*), PAGE_READWRITE, &oldProtect)) {
-				vtable[i] = &hkEndScene;
-				VirtualProtect(&vtable[i], sizeof(void*), oldProtect, &oldProtect);
-				LOG("Successfully changed permissions on vtable.");
-				return S_OK;
-			}
-			else {
-				LOG("Failed to change permissions on vtable.");
-				return E_FAIL;
-			}
-		}
+	// call virtualprotect to change read-only perms on vtable
+	DWORD oldProtect;
+	LOG("Before hook: VMT[42] = ", vtable[ENDSCENE_INDEX]);
+	if (VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(void*), PAGE_READWRITE, &oldProtect)) {
+		vtable[ENDSCENE_INDEX] = &hkEndScene;
+		VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(void*), oldProtect, &oldProtect);
+		LOG("After hook: VMT[42] = ", vtable[ENDSCENE_INDEX]);
 	}
-	setupImGui();
-	LOG("EndScene not found");
-	return E_FAIL;
+	else {
+		LOG("VirtualProtect failed to change vtable permissions.");
+		return E_FAIL;
+	}
+
+	LOG("Successfully installed hook.");
+	return S_OK;
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
-	// AllocConsole() and freopen() to redirect stdout to a console window for debugging
-	AllocConsole();
-    freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
-
 	switch (fdwReason) {
-	case DLL_PROCESS_ATTACH || DLL_THREAD_ATTACH: {
+	case DLL_PROCESS_ATTACH:
+		DisableThreadLibraryCalls(hinstDLL);
+		AllocConsole();
+		freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
+		LOG("test?");
+
 		if (findVMT() != S_OK) {
 			LOG("Failed to find VMT.");
-			return FALSE;
-		} // findVMT() will internally set the global variable device and the global variable vtablePtr
+			return 1;
+		}
 		installHook();
 		break;
 	}
-	case DLL_THREAD_DETACH:
-		// Cleanup code here
-		break;
-	case DLL_PROCESS_DETACH:
-		// Cleanup code here
-		break;
-	}
-	return TRUE; 
+	return TRUE;
 }
