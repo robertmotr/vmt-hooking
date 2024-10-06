@@ -30,3 +30,8 @@ obj/
 *.idb
 *.filters
 *.lib
+*.iobj
+*.ipdb
+*.idb
+*.ilk
+*.idb

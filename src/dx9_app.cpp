@@ -30,8 +30,7 @@ bool InitD3D(HWND hwnd) {
     d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
 
     if (FAILED(d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
-        D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-        &d3dpp, &d3dDevice))) {
+        D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
         return false;
     }
 

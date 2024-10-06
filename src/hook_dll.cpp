@@ -1,3 +1,59 @@
+/*
+Short explanation because it was very difficult to find this info (chatgpt with some edits sprinkled in)
+I spent a long time trying to understand this because resources are all over the place.
+
+Background:
+    Virtual functions in C++ allow for runtime polymorphism, where the function to be called is resolved at runtime based on the actual type of the object, 
+    not the type of the pointer or reference that is used to call the function. When you declare a function as virtual, the compiler generates a Virtual Method Table (VMT) for the class. 
+    This table contains pointers to the actual function implementations for the class. Each object of a class with virtual methods has a vtable pointer, which points to the vtable of that class.
+    When you call a virtual function, the program looks up the function address in the vtable and then calls the appropriate function. This allows you to override methods in derived classes.
+
+    In comparison, if you DON'T mark the function as virtual, the function will be resolved at compile time and no vtable is generated.
+    
+    
+    Example:
+        Dynamic polymorphism, method overwriting gets resolved at runtime using VMT:
+        (More flexible but more overhead + slower)
+
+        class Base {
+        public:
+            virtual void show() {  // Virtual method
+                ...
+            }
+        };
+
+        class Derived : public Base {
+        public:
+            void show() {  // Overrides virtual method
+                ...
+            }
+        };
+
+        Static (no vtable generation) polymorphism:
+		(Faster but less flexible)
+
+        class Base {
+        public:
+            void show() {
+                ...
+            }
+        };
+
+        class Derived : public Base {
+        public:
+            void show() {
+                ...
+        }
+
+Important notes:
+    - Use __stdcall for our hooked endscene since its the calling convention used in DX9.
+
+Credits:
+    ChatGPT 4o (my lovely)
+    https://www.unknowncheats.me/forum/d3d-programming/66133-midfunction-hook-v2.html (for the pattern scanning and the vmt hook idea)
+    https://github.com/stimmy1442/EndSceneHookExample (for the inline asm, avoiding the yucky midfunction hook from the first post)
+*/
+
 #include <windows.h>
 #include <d3d9.h>
 #include <d3dx9.h>
@@ -7,259 +63,284 @@
 #include <cstdio>
 #include <string>
 #include <iostream>
-#include <DxErr.h>
 #include <logger.h>
 
-// link dx9 libs and detours
+// link dx9 stuff
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
 #pragma comment(lib, "logging.lib")
 
-#define ENDSCENE_INDEX 42
-#define VMT_SIZE 119
+#define                                     ENDSCENE_INDEX 42 // index of EndScene() in IDirect3DDevice9 vtable
 
-// typedefs for DX9 stuff to clean things up
-// 2nd typedef is for the EndScene function so we can eventually use a PVOID given to us (need to cast it)
-typedef IDirect3DDevice9				DX9_DEVICE;
-typedef HRESULT							(WINAPI* EndScene)(DX9_DEVICE* ptrDevice);
+DWORD*                                      oEndScene = nullptr; // original EndScene function address
+DWORD*                                      vtable = nullptr; // IDirect3DDevice9 virtual method table
+volatile LPDIRECT3DDEVICE9                  pDevice = nullptr; // IDirect3DDevice9 pointer being used in the target application
 
-DX9_DEVICE*								device = nullptr;				// ptr to IDirect3DDevice9 
-void*									originalEndScene = nullptr;	    // fn ptr to original DX9::EndScene function
-void*									vtable[VMT_SIZE];  // ptr to IDirect3DDevice9 vtable
+ImGuiIO*                                    io = nullptr; // stored globally to reduce overhead inside renderOverlay
 
 /*
-short explanation because it was very difficult to find this info (chatgpt with some edits sprinkled in)
-i spent a long time trying to understand this because resources for this are quite scarce
-
-In C++, you can have polymorphism such that functions marked as virtual get resolved at runtime.
-For example, if you have a class Base and a class Derived and Derived inherits from Base, you can have a virtual function in Base (show)
-that is overridden in Derived. When you call the function on a Base pointer that points to a Derived object, 
-the Derived function will be called. When the function is marked with a virtual keyword, the compiler
-generates a virtual table for the object which holds function pointers to functions marked as virtual.
-
-In comparison, if you DON'T mark the function as virtual, the function will be resolved at compile time and no vtable is generated.
-This is why you can't hook non-virtual functions using VMT hooking.
-
-Dynamic polymorphism, method overwriting gets resolved at runtime using VMT:
-(More flexible but more overhead + slower)
-
-class Base {
-public:
-	virtual void show() {  // Virtual method
-		...
-	}
-};
-
-class Derived : public Base {
-public:
-	void show() {  // Overrides virtual method
-		...
-	}
-};
-
-Static (no vtable generation) polymorphism:
-
-class Base {
-public: 
-	void show() {
-		...
-	}
-};
-
-class Derived : public Base {
-public:
-	void show() {
-		...
-	}
-}
-
-Two side notes:
-1. All objects of a given class that share the same virtual methods share the same VMT.
-2. Also, when each object is constructed, it holds a vptr that points to the vtable that is shared among all of its relatives.
-This vptr is usually the first member of the object's memory layout.
-
-VMT Hooking in practice:
-Find the vtable: Locate the vtable for the object, which is typically at the beginning of the object’s memory layout.
-Overwrite the method's function pointer: Replace the function pointer of the target method (e.g., EndScene in Direct3D) in the vtable with a pointer to your custom function (the hook).
-Intercept calls: When the method is called, your hook function is executed instead of the original method.
-Optionally, call the original method: Inside the hook, you can choose to call the original method by invoking the saved original function pointer.
-
- * findVMT
- * --------------------
- * 1. Get the foreground window
- * 2. Create a dummy Direct3D device
- * 3. Ptr to IDirect3DDevice9 is stored in global variable device
- * 3. Return S_OK if successful, E_FAIL if failed
- *
- *  returns: S_OK/E_FAIL (HRESULT)
- */
-
- /*
-  * hkEndScene (hooked version of EndScene)
-  * --------------------
-  * 1. Begin a new frame
-  * 2. Render ImGui
-  * 3. Return the original EndScene function
-  *  returns: S_OK/E_FAIL (HRESULT)
- */
-HRESULT WINAPI hkEndScene(DX9_DEVICE* ptrDevice) {
-	LOG("Hooked EndScene called.");
-	static bool initialized = false;
-
-	if (!initialized) {
-		initialized = true;
-
-		ImGui::CreateContext();
-
-		// retrieve window handle from device
-		HRESULT hr;
-		D3DDEVICE_CREATION_PARAMETERS cparams;
-		hr = ptrDevice->GetCreationParameters(&cparams);
-		if (FAILED(hr)) {
-			LOG("Failed to get device creation parameters.");
-			LOG("Got: ", HResultToString(hr));
-			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
-		}
-		// init backend with correct window handle
-		if (!ImGui_ImplWin32_Init(cparams.hFocusWindow)) {
-			LOG("ImGui_ImplWin32_Init failed.");
-			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
-		}
-		if (!ImGui_ImplDX9_Init(ptrDevice)) {
-			LOG("ImGui_ImplDX9_Init failed.");
-			return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
-		}
-	}
-
-	ImGui_ImplDX9_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	ImGui::Begin("hook");
-	ImGui::Text("Now hooked using ImGui.");
-	ImGui::End();
-
-	ImGui::EndFrame();
-	ImGui::Render();
-	ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-
-	// call original EndScene fn
-	return reinterpret_cast<EndScene>(originalEndScene)(ptrDevice);
-}
-
-HRESULT WINAPI findVMT() {
-	HWND hwnd = FindWindow(NULL, L"DirectX 9 Example");
-	if (!hwnd) {
-		LOG("Failed to get foreground window.");
-		return E_FAIL;
-	}
-
-	IDirect3D9* pD3D = Direct3DCreate9(D3D_SDK_VERSION);
-	if (!pD3D) {
-		LOG("Failed to create IDirect3D9 object.");
-		return E_FAIL;
-	}
-
-	D3DDISPLAYMODE displayMode;
-	HRESULT result = pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &displayMode);
-	if (FAILED(result)) {
-		LOG("Failed to get adapter display mode. HRESULT: ", HResultToString(result));
-		pD3D->Release();
-		return E_FAIL;
-	}
-
-	D3DPRESENT_PARAMETERS d3dpp = {};
-	d3dpp.Windowed = TRUE;
-	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	d3dpp.hDeviceWindow = hwnd;
-	d3dpp.BackBufferFormat = displayMode.Format; 
-	d3dpp.BackBufferCount = 1;
-	d3dpp.BackBufferWidth = 0;
-	d3dpp.BackBufferHeight = 0;
-	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-	d3dpp.MultiSampleType = D3DMULTISAMPLE_NONE;
-	d3dpp.MultiSampleQuality = 0;
-
-	result = pD3D->CheckDeviceType(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
-		displayMode.Format, displayMode.Format, TRUE);
-	if (FAILED(result)) {
-		LOG("Failed to check device type in windowed mode. HRESULT: ", HResultToString(result));
-		pD3D->Release();
-		return E_FAIL;
-	}
-
-	result = pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
-		D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &device);
-
-	if (FAILED(result)) {
-		LOG("Failed to create IDirect3DDevice9 object with hardware vertex processing. Trying software vertex processing. HRESULT: ", HResultToString(result));
-		result = pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
-			D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device);
-
-		if (FAILED(result)) {
-			LOG("Failed to create IDirect3DDevice9 object with software vertex processing. HRESULT: ", HResultToString(result));
-			pD3D->Release();
-			return E_FAIL;
-		}
-	}
-
-	LOG("Successfully created IDirect3DDevice9 object and found VMT.");
-
-	// obtain the vtable
-	memcpy(vtable, *(void***)device, sizeof(vtable));
-
-	pD3D->Release();
-	device->Release();
-	return S_OK;
-}
-
-/*
-* 1. find dx9 HMODULE handle through GetModuleHandle, looking for the fn handle through the dx9 DLL
-* 2. find the original EndScene address by calling GetProcAddress on EndScene
-* 3. find the index of the original EndScene in the vtable by comparing every fn pointer to the original EndScene
-* 4. change the permissions on the vtable to allow writing using VirtualProtect
-* 5. replace the original EndScene pointer with the hooked EndScene pointer
-* returns: S_OK/E_FAIL (HRESULT)
+* Compares a pattern to a specified memory region.
+	*
+	* @param data The memory region to search.
+	* @param pattern The pattern to search for.
+	* @param mask The mask specifying which bytes in the pattern to compare.
+	* @return True if the pattern was found, false otherwise.
 */
-HRESULT WINAPI installHook() {
-	HMODULE dx9Handle = GetModuleHandle(TEXT("d3d9.dll"));
-	if (dx9Handle == NULL) {
-		LOG("Getting module handle for d3d9.dll failed");
-	}
-
-	originalEndScene = vtable[ENDSCENE_INDEX]; // 42 should be the index of EndScene in the vtable
-
-	// call virtualprotect to change read-only perms on vtable
-	DWORD oldProtect;
-	LOG("Before hook: VMT[42] = ", vtable[ENDSCENE_INDEX]);
-	if (VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(void*), PAGE_READWRITE, &oldProtect)) {
-		vtable[ENDSCENE_INDEX] = &hkEndScene;
-		VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(void*), oldProtect, &oldProtect);
-		LOG("After hook: VMT[42] = ", vtable[ENDSCENE_INDEX]);
-	}
-	else {
-		LOG("VirtualProtect failed to change vtable permissions.");
-		return E_FAIL;
-	}
-
-	LOG("Successfully installed hook.");
-	return S_OK;
+bool compare(const uint8_t* data, const uint8_t* pattern, const char* mask) {
+    for (; *mask; ++mask, ++data, ++pattern) {
+        if (*mask == 'x' && *data != *pattern) {
+            return false;
+        }
+    }
+    return true;
 }
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
-	switch (fdwReason) {
-	case DLL_PROCESS_ATTACH:
-		DisableThreadLibraryCalls(hinstDLL);
-		AllocConsole();
-		freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
-		LOG("test?");
+/*
+    * Searches for a pattern in a specified memory region.
+    *
+    * @param startAddress The starting address of the memory region to search.
+    * @param regionSize The size of the memory region to search.
+    * @param pattern The pattern to search for.
+    * @param mask The mask specifying which bytes in the pattern to compare.
+    * @return The address of the first occurrence of the pattern, or NULL if not found.
+    */
+uintptr_t patternScan(uintptr_t startAddress, size_t regionSize, const uint8_t* pattern, const char* mask) {
+    size_t patternLength = strlen(mask);
 
-		if (findVMT() != S_OK) {
-			LOG("Failed to find VMT.");
-			return 1;
-		}
-		installHook();
-		break;
+    for (size_t i = 0; i <= regionSize - patternLength; i++) {
+        uintptr_t currentAddress = startAddress + i;
+        if (compare(reinterpret_cast<const uint8_t*>(currentAddress), pattern, mask)) {
+            return currentAddress;  
+        }
+    }
+
+    return NULL;
+}
+
+/*
+	* Returns the HWND window handle of the process we're inside of.
+    * 
+	* @return The window handle of the process we're inside of.
+*/
+HWND GetProcessWindow() {
+    HWND currentWindow = nullptr;
+    LOG("Attempting to find process window...");
+
+    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
+        DWORD procId;
+        GetWindowThreadProcessId(hwnd, &procId);
+
+        if (GetCurrentProcessId() == procId) {
+            HWND* pCurrentWindow = reinterpret_cast<HWND*>(lParam);
+            *pCurrentWindow = hwnd;
+            LOG("Process window found.");
+            return FALSE;
+        }
+        return TRUE;
+        }, reinterpret_cast<LPARAM>(&currentWindow));
+
+    if (!currentWindow) {
+        LOG("Failed to find process window.");
+    }
+    return currentWindow;
+}
+
+/*
+* Called every frame to render the ImGui overlay from inside our hook.
+	*
+	* @param ptrDevice The IDirect3DDevice9 pointer used in the target application. 
+*/
+void __stdcall renderOverlay(LPDIRECT3DDEVICE9 ptrDevice) {
+    static bool initialized = false;
+
+    if (!initialized) {
+        LOG("Initializing ImGui...");
+        initialized = true;
+
+        LOG("Creating ImGui context...");
+        ImGui::CreateContext();
+		io = &ImGui::GetIO();
+        io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io->WantCaptureKeyboard = true;
+        io->WantCaptureMouse = true;
+
+        HRESULT hr;
+        D3DDEVICE_CREATION_PARAMETERS cparams;
+        hr = ptrDevice->GetCreationParameters(&cparams);
+        if (FAILED(hr)) {
+            LOG("Failed to get device creation parameters.");
+            return;
+        }
+
+        // init backend with correct window handle
+        if (!ImGui_ImplWin32_Init(cparams.hFocusWindow)) {
+            LOG("ImGui_ImplWin32_Init failed.");
+            return;
+        }
+        if (!ImGui_ImplDX9_Init(ptrDevice)) {
+            LOG("ImGui_ImplDX9_Init failed.");
+            return;
+        }
+        LOG("ImGui initialized successfully.");
+    }
+
+	// this needs to be done every frame in order to have responsive input (e.g. buttons)
+    io->MouseDown[0] = GetAsyncKeyState(VK_LBUTTON) & 0x8000;  
+    io->MouseDown[1] = GetAsyncKeyState(VK_RBUTTON) & 0x8000;  
+    io->MouseDown[2] = GetAsyncKeyState(VK_MBUTTON) & 0x8000;  
+
+    ImGui_ImplDX9_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::Begin("example imgui overlay after hooking");
+    ImGui::Text("Now hooked using ImGui.");
+    if (ImGui::Button("Close")) {
+        exit(0);
+    }
+
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+}
+
+/*
+    Hooked EndScene function for DX9 rendering pipeline.
+    This function intercepts the call to the original EndScene method in the
+    IDirect3DDevice9 vtable, allowing us to insert custom rendering logic (e.g.,
+    ImGui overlay) before handing control back to DirectX for normal rendering.
+    
+    How this works:
+        1. Inline assembly is used to get the CPU's state (registers and flags).
+        2. The device pointer (LPDIRECT3DDEVICE9) is retrieved from the stack.
+        In the case of DX9, the device pointer is passed to EndScene and
+        is located at an offset on the stack. We access it manually.
+        3. `renderOverlay(pDevice)` is called to execute our custom rendering logic.
+        4. We restore the CPU's state using inline assembly, making sure to return
+        control back to the original EndScene function(`oEndScene`), which ensures
+        DirectX continues rendering as expected.
+    
+    Notes:
+        - The function is marked as `__declspec(naked)` to avoid the compiler generating
+        prologue and epilogue code (such as setting up the stack frame). This is essential
+        because we're manually manipulating the stack and registers.
+        - The 0x2C offset is specific to the calling convention and the layout of arguments
+        on the stack when EndScene is called. This offset points to the IDirect3DDevice9
+        pointer passed to EndScene. I didn't come up with this asm code as well as finding the offset,
+		credits to the UC posts I've researched and the original author.
+*/
+__declspec(naked) void hkEndScene() {
+
+    __asm {
+		pushad // push all general purpose registers onto stack
+		pushfd // push all flags onto stack
+		push esi // push esi onto stack
+
+		mov esi, dword ptr ss : [esp + 0x2c] // gets the IDirect3DDevice9 pointer from the stack
+		mov pDevice, esi // store the pointer in a global variable
+    }
+
+	renderOverlay(pDevice);
+
+    __asm {
+		pop esi // pop esi off stack
+		popfd // pop flags off stack
+		popad // pop all general purpose registers off stack
+		jmp oEndScene // jump back to the address stored in the oEndScene variable
+    }
+}
+
+/*
+* Finds the IDirect3DDevice9 pointer and the VMT. Address to VMT is then stored globally in vtable.
+	*
+	* @return S_OK if successful, E_FAIL otherwise.
+*/
+HRESULT __stdcall findVMT() {
+    LOG("Attempting to find VMT...");
+	DWORD hD3D = NULL;
+    while(!hD3D) hD3D = (DWORD)GetModuleHandle("d3d9.dll");
+    LOG("d3d9.dll found.");
+    // pointer chain:
+	// d3d9.dll -> IDirect3D9 -> IDirect3DDevice9 -> IDirect3DDevice9 VMT
+	// honestly i have no idea how this pattern was found, but it works, credits to the original author
+    DWORD PPPDevice = patternScan(hD3D, 0x128000, (PBYTE)"\xC7\x06\x00\x00\x00\x00\x89\x86\x00\x00\x00\x00\x89\x86", "xx????xx????xx");
+	if (PPPDevice == NULL) {
+		LOG("Failed to find IDirect3DDevice9 pointer.");
+		return E_FAIL;
 	}
-	return TRUE;
+	LOG("IDirect3DDevice9 pointer found.");
+    memcpy(&vtable, (void*)(PPPDevice + 2), 4);
+    return S_OK;
+}
+
+/*
+* Installs the hook by overwriting the EndScene function pointer in the VMT with our hook.
+	*
+	* @return S_OK if successful, E_FAIL otherwise.
+*/
+HRESULT __stdcall installHook() {
+    if (!vtable) {
+        LOG("VMT not found.");
+        return E_FAIL;
+    }
+
+    LOG("Attempting to install hook...");
+
+	// overwrite vtable entry with our hook
+    DWORD oldProtect;
+    if (VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(DWORD), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        // save original EndScene function pointer
+        oEndScene = (DWORD*)vtable[ENDSCENE_INDEX];
+        vtable[ENDSCENE_INDEX] = (DWORD)&hkEndScene;
+        VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(DWORD), oldProtect, &oldProtect);
+        LOG("Successfully installed hook.");
+		// dx9 endscene calls should now be redirected to preHkEndScene
+    }
+	else {
+		LOG("Failed to install hook.");
+		return E_FAIL;
+	}
+}
+
+/*
+* Starts a debug console and installs the hook. Waits for VK_END to close. This thread entry point is used to avoid blocking the main thread. 
+* (Not sure if this is necessary though)
+	*
+	* @param hModule The handle to the DLL module.
+*/
+void __stdcall hookThread(HMODULE hModule) {
+    AllocConsole();
+    freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
+    LOG("Hook thread started.");
+
+    if (FAILED(findVMT())) {
+        LOG("Failed to find VMT.");
+        return;
+    }
+    if (FAILED(installHook())) {
+        LOG("Failed to install hook.");
+        return;
+    }
+
+    LOG("Hook installed successfully. Waiting for VK_END to unhook...");
+    while (!GetAsyncKeyState(VK_END)) {
+        Sleep(1);
+    }
+
+    LOG("VK_END pressed. Unhooking...");
+    // Unhook and cleanup
+	// TODO: Implement unhooking
+
+    FreeLibraryAndExitThread(hModule, 0);
+    return;
+}
+
+BOOL __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
+    if (fdwReason == DLL_PROCESS_ATTACH) {
+        LOG("DLL_PROCESS_ATTACH called.");
+		DisableThreadLibraryCalls(hModule); 
+        CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)hookThread, NULL, NULL, NULL);
+    }
+    return TRUE;
 }
