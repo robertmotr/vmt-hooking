@@ -120,9 +120,8 @@ uintptr_t patternScan(uintptr_t startAddress, size_t regionSize, const uint8_t* 
 /*
 * Called every frame to render the ImGui overlay from inside our hook.
 	*
-	* @param ptrDevice The IDirect3DDevice9 pointer used in the target application. 
 */
-void __stdcall renderOverlay(LPDIRECT3DDEVICE9 ptrDevice) {
+void __stdcall renderOverlay() {
     static bool initialized = false;
 
     if (!initialized) {
