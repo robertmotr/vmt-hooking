@@ -118,34 +118,6 @@ uintptr_t patternScan(uintptr_t startAddress, size_t regionSize, const uint8_t* 
 }
 
 /*
-	* Returns the HWND window handle of the process we're inside of.
-    * 
-	* @return The window handle of the process we're inside of.
-*/
-HWND GetProcessWindow() {
-    HWND currentWindow = nullptr;
-    LOG("Attempting to find process window...");
-
-    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-        DWORD procId;
-        GetWindowThreadProcessId(hwnd, &procId);
-
-        if (GetCurrentProcessId() == procId) {
-            HWND* pCurrentWindow = reinterpret_cast<HWND*>(lParam);
-            *pCurrentWindow = hwnd;
-            LOG("Process window found.");
-            return FALSE;
-        }
-        return TRUE;
-        }, reinterpret_cast<LPARAM>(&currentWindow));
-
-    if (!currentWindow) {
-        LOG("Failed to find process window.");
-    }
-    return currentWindow;
-}
-
-/*
 * Called every frame to render the ImGui overlay from inside our hook.
 	*
 	* @param ptrDevice The IDirect3DDevice9 pointer used in the target application. 
