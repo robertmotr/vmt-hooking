@@ -137,7 +137,7 @@ void __stdcall renderOverlay() {
 
         HRESULT hr;
         D3DDEVICE_CREATION_PARAMETERS cparams;
-        hr = ptrDevice->GetCreationParameters(&cparams);
+        hr = pDevice->GetCreationParameters(&cparams);
         if (FAILED(hr)) {
             LOG("Failed to get device creation parameters.");
             return;
@@ -148,7 +148,7 @@ void __stdcall renderOverlay() {
             LOG("ImGui_ImplWin32_Init failed.");
             return;
         }
-        if (!ImGui_ImplDX9_Init(ptrDevice)) {
+        if (!ImGui_ImplDX9_Init(pDevice)) {
             LOG("ImGui_ImplDX9_Init failed.");
             return;
         }
@@ -212,7 +212,7 @@ __declspec(naked) void hkEndScene() {
 		mov pDevice, esi // store the pointer in a global variable
     }
 
-	renderOverlay(pDevice);
+	renderOverlay();
 
     __asm {
 		pop esi // pop esi off stack
@@ -230,7 +230,7 @@ __declspec(naked) void hkEndScene() {
 HRESULT __stdcall findVMT() {
     LOG("Attempting to find VMT...");
 	DWORD hD3D = NULL;
-    while(!hD3D) hD3D = (DWORD)GetModuleHandle("d3d9.dll");
+    while(!hD3D) hD3D = (DWORD)GetModuleHandle(L"d3d9.dll");
     LOG("d3d9.dll found.");
     // pointer chain:
 	// d3d9.dll -> IDirect3D9 -> IDirect3DDevice9 -> IDirect3DDevice9 VMT
