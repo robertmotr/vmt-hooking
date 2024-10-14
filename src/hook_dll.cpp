@@ -297,12 +297,11 @@ void __stdcall hookThread(HMODULE hModule) {
 
     LOG("Hook installed successfully. Waiting for VK_END to unhook...");
     while (!GetAsyncKeyState(VK_END)) {
-        Sleep(1);
-    }
+        Sleep(500);
+        LOG("VMT address: ", (void*)vtable[0]);
+		LOG("EndScene address: ", (void*)oEndScene);
 
-    LOG("VK_END pressed. Unhooking...");
-    // Unhook and cleanup
-	// TODO: Implement unhooking
+    }
 
     FreeLibraryAndExitThread(hModule, 0);
     return;

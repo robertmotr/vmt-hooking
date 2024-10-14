@@ -1,7 +1,9 @@
 #include <windows.h>
 #include <d3d9.h>
 #include <d3dx9.h>
+#include "logger.h"
 
+#pragma comment(lib, "logging.lib")
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
 
@@ -40,6 +42,11 @@ bool InitD3D(HWND hwnd) {
 }
 
 void Render() {
+    Sleep(500);
+    void** vtable = *(void***)d3dDevice;
+	LOG("Real D3D Device addr from main app:", d3dDevice);
+	LOG("Real D3D Device vtable addr from main app:", vtable);
+	LOG("Real D3D Device EndScene addr from main app:", vtable[42]);
     if (d3dDevice) {
         d3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
         d3dDevice->BeginScene();
