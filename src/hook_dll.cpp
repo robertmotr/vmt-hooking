@@ -272,6 +272,7 @@ HRESULT __stdcall installHook() {
 		LOG("Failed to install hook.");
 		return E_FAIL;
 	}
+    return S_OK;
 }
 
 /*
