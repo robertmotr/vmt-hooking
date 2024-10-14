@@ -73,7 +73,7 @@ Credits:
 #define                                     ENDSCENE_INDEX 42 // index of EndScene() in IDirect3DDevice9 vtable
 
 DWORD*                                      oEndScene = nullptr; // original EndScene function address
-DWORD*                                      vtable = nullptr; // IDirect3DDevice9 virtual method table
+DWORD**                                     vtable = nullptr; // IDirect3DDevice9 virtual method table
 volatile LPDIRECT3DDEVICE9                  pDevice = nullptr; // IDirect3DDevice9 pointer being used in the target application
 
 ImGuiIO*                                    io = nullptr; // stored globally to reduce overhead inside renderOverlay
@@ -202,7 +202,7 @@ void __stdcall renderOverlay() {
 		credits to the UC posts I've researched and the original author.
 */
 __declspec(naked) void hkEndScene() {
-
+    LOG("Hooked EndScene called");
     __asm {
 		pushad // push all general purpose registers onto stack
 		pushfd // push all flags onto stack
@@ -263,7 +263,7 @@ HRESULT __stdcall installHook() {
     if (VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(DWORD), PAGE_EXECUTE_READWRITE, &oldProtect)) {
         // save original EndScene function pointer
         oEndScene = (DWORD*)vtable[ENDSCENE_INDEX];
-        vtable[ENDSCENE_INDEX] = (DWORD)&hkEndScene;
+        vtable[ENDSCENE_INDEX] = (DWORD*)&hkEndScene;
         VirtualProtect(&vtable[ENDSCENE_INDEX], sizeof(DWORD), oldProtect, &oldProtect);
         LOG("Successfully installed hook.");
 		// dx9 endscene calls should now be redirected to preHkEndScene
@@ -298,9 +298,10 @@ void __stdcall hookThread(HMODULE hModule) {
     LOG("Hook installed successfully. Waiting for VK_END to unhook...");
     while (!GetAsyncKeyState(VK_END)) {
         Sleep(500);
-        LOG("VMT address: ", (void*)vtable[0]);
+		LOG("Hooked EndScene addr:", (void*)&hkEndScene);
+        LOG("VMT address: ", (void*)vtable);
+		LOG("VMT[42]: ", (void*)vtable[42]);
 		LOG("EndScene address: ", (void*)oEndScene);
-
     }
 
     FreeLibraryAndExitThread(hModule, 0);
